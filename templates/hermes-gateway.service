@@ -1,0 +1,41 @@
+[Unit]
+Description=Client Hermes Agent Gateway (Isolated Non-Root)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=svc-agent
+Group=svc-agent
+WorkingDirectory=/var/lib/hermes-agent/workspace
+Environment=HOME=/var/lib/hermes-agent
+Environment=HERMES_HOME=/var/lib/hermes-agent
+EnvironmentFile=/var/lib/hermes-agent/.env
+ExecStart=/usr/local/bin/hermes gateway run
+Restart=always
+RestartSec=5
+
+# Privilege & filesystem isolation
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+UMask=0077
+ReadWritePaths=/var/lib/hermes-agent
+
+# 8-16 GB VPS resource containment (8GB: MemoryMax=5G; 16GB: MemoryMax=11G)
+MemoryHigh=4G
+MemoryMax=5G
+CPUQuota=300%
+TasksMax=512
+
+[Install]
+WantedBy=multi-user.target

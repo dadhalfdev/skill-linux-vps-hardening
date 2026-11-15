@@ -1,0 +1,92 @@
+#cloud-config
+# Reusable first-boot cloud-init for 8-16 GB Contabo Ubuntu 24.04 client agent VMs.
+# Replace REPLACE_ADMIN_USER and REPLACE_SSH_PUBLIC_KEY before passing as userData.
+
+package_update: true
+package_upgrade: true
+
+users:
+  - name: REPLACE_ADMIN_USER
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) ALL"]
+    lock_passwd: true
+    ssh_authorized_keys:
+      - REPLACE_SSH_PUBLIC_KEY
+
+packages:
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - acl
+  - curl
+  - jq
+  - git
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/99-hardening.conf
+    permissions: '0644'
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      PubkeyAuthentication yes
+      AllowUsers REPLACE_ADMIN_USER
+      X11Forwarding no
+      AllowAgentForwarding no
+      MaxAuthTries 4
+
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+  - path: /etc/fail2ban/jail.d/sshd-local.conf
+    permissions: '0644'
+    content: |
+      [DEFAULT]
+      banaction = ufw
+      bantime = 1h
+      findtime = 10m
+      maxretry = 4
+
+      [sshd]
+      enabled = true
+
+  - path: /etc/sysctl.d/99-agent-vps.conf
+    permissions: '0644'
+    content: |
+      vm.swappiness = 10
+      net.ipv4.conf.all.rp_filter = 1
+      net.ipv4.conf.default.rp_filter = 1
+      net.ipv4.tcp_syncookies = 1
+      net.ipv4.conf.all.accept_redirects = 0
+      net.ipv6.conf.all.accept_redirects = 0
+
+runcmd:
+  # 2G swapfile baseline (increase to 4G if running Chromium/Docker on 8-16GB VMs)
+  - [sh, -c, "if [ ! -f /swapfile ]; then fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab; fi"]
+  - [sysctl, --system]
+  - [passwd, -l, root]
+  - [systemctl, disable, --now, avahi-daemon.service, avahi-daemon.socket, cups.service, cups.socket, cups.path, cups-browsed.service]
+  - [ufw, default, deny, incoming]
+  - [ufw, default, allow, outgoing]
+  # Block outbound SMTP spam & common Stratum mining ports
+  - [ufw, deny, out, "25/tcp"]
+  - [ufw, deny, out, "465/tcp"]
+  - [ufw, deny, out, "587/tcp"]
+  - [ufw, deny, out, "3333/tcp"]
+  - [ufw, deny, out, "4444/tcp"]
+  - [ufw, deny, out, "5555/tcp"]
+  - [ufw, deny, out, "14433/tcp"]
+  - [ufw, deny, out, "14444/tcp"]
+  # Restrict SSH in Contabo Cloud Firewall to your admin IP; UFW allows 22 as fallback until restricted
+  - [ufw, allow, "22/tcp"]
+  - [ufw, --force, enable]
+  - [systemctl, enable, --now, fail2ban, unattended-upgrades]
+  - [sshd, -t]
+  - [systemctl, reload, ssh]
+  - [useradd, --system, --create-home, --home-dir, /var/lib/hermes-agent, --shell, /usr/sbin/nologin, svc-agent]
+  - [chmod, "0700", /var/lib/hermes-agent]
