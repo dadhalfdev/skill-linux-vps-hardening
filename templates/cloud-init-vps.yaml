@@ -1,5 +1,5 @@
 #cloud-config
-# Reusable first-boot cloud-init for 8-16 GB Contabo Ubuntu 24.04 client agent VMs.
+# Reusable first-boot cloud-init for 8-16 GB Ubuntu 24.04 client agent VMs (provider-agnostic).
 # Replace REPLACE_ADMIN_USER and REPLACE_SSH_PUBLIC_KEY before passing as userData.
 
 package_update: true
@@ -82,7 +82,7 @@ runcmd:
   - [ufw, deny, out, "5555/tcp"]
   - [ufw, deny, out, "14433/tcp"]
   - [ufw, deny, out, "14444/tcp"]
-  # Restrict SSH in Contabo Cloud Firewall to your admin IP; UFW allows 22 as fallback until restricted
+  # Restrict SSH in your cloud provider firewall to your admin IP; UFW allows 22 as fallback until restricted
   - [ufw, allow, "22/tcp"]
   - [ufw, --force, enable]
   - [systemctl, enable, --now, fail2ban, unattended-upgrades]

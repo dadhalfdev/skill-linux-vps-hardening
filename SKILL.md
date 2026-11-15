@@ -1,6 +1,6 @@
 ---
 name: linux-vps-hardening
-description: "Use when securing a Contabo VPS or client agent gateway."
+description: "Use when securing a Linux VPS or client agent gateway."
 version: 1.1.0
 author: Hermes
 license: MIT
@@ -8,45 +8,45 @@ platforms: [linux]
 metadata:
   hermes:
     category: devops
-    tags: [Security, VPS, Contabo, Gateway, Systemd, Hardening]
+    tags: [Security, VPS, Linux, Gateway, Systemd, Hardening]
     related_skills: [hermes-multi-profile-setup, cron-shell-execution]
 ---
 
 # Linux VPS & Client Agent Gateway Hardening
 
-Provision, harden, and audit 8-16 GB Contabo VPS hosts running AI agent gateways and web apps without forcing clients onto Tailscale. Covers Contabo first-boot setup, non-root `systemd` containment, gateway allowlists, and anti-cryptominer/anti-malware controls; does not manage DNS propagation, billing, or multi-tenant co-hosting on a single kernel. Dependencies: Ubuntu/Debian Linux primitives (`ufw`, `fail2ban`, `systemd`, `unattended-upgrades`, `sshd`, `nginx`).
+Provision, harden, and audit 8-16 GB Linux VPS hosts (any provider) running AI agent gateways and web apps without forcing clients onto Tailscale. Covers first-boot setup, non-root `systemd` containment, gateway allowlists, and anti-cryptominer/anti-malware controls; does not manage DNS propagation, provider billing, or multi-tenant co-hosting on a single kernel. Dependencies: Ubuntu/Debian Linux primitives (`ufw`, `fail2ban`, `systemd`, `unattended-upgrades`, `sshd`, `nginx`).
 
 ## When to Use
 
-- Setting up a new 8-16 GB Contabo VM for a client AI agent gateway
+- Setting up a new 8-16 GB Linux VM for a client AI agent gateway on any VPS provider
 - Securing a client VPS without requiring them to install Tailscale
 - Auditing an existing multi-app VPS for cross-project `.env` leaks, root services, or `0.0.0.0` binds
 - Checking a host for cryptominers, persistence backdoors, or supply-chain advisories
 
 ## Prerequisites
 
-- Ubuntu 24.04/22.04 or Debian VPS (8-16 GB RAM, one client per VM)
-- Root or `sudo` SSH access (or Contabo Customer Panel access) and your admin SSH public key
-- Contabo Cloud Firewall access in the Customer Panel (free on VPS/VDS)
+- Ubuntu 24.04/22.04 or Debian Linux VPS (8-16 GB RAM, one client per VM)
+- Root or `sudo` SSH access (or provider web/VNC console) and your admin SSH public key
+- Cloud provider network firewall access (when available) to restrict port 22 at the edge
 - Client messaging bot tokens and explicit allowed user IDs (never `GATEWAY_ALLOW_ALL_USERS=true`)
 
 ## How to Run
 
 1. Load reference guides on demand via `skill_view`:
-   - `references/contabo-client-vps.md` — 8-16 GB Contabo architecture, no-client-Tailscale access, Cloud Firewall, and backups
+   - `references/client-vps-architecture.md` — 8-16 GB VPS sizing, no-client-Tailscale access, cloud firewalls, and backups
    - `references/agent-gateway-and-malware-defense.md` — Hermes gateway lockdown, anti-cryptominer rules, and malware audit
-2. Inspect and customize `templates/cloud-init-contabo.yaml` and `templates/hermes-gateway.service` using `read_file` and `write_file`.
-3. Copy `scripts/harden-contabo-agent.sh` and `scripts/check-miner-malware.sh` to the target host and invoke them through the `terminal` tool.
+2. Inspect and customize `templates/cloud-init-vps.yaml` and `templates/hermes-gateway.service` using `read_file` and `write_file`.
+3. Copy `scripts/harden-agent-vps.sh` and `scripts/check-miner-malware.sh` to the target host and invoke them through the `terminal` tool.
 
 ## Quick Reference
 
 | Artifact | Purpose |
 |---|---|
-| `templates/cloud-init-contabo.yaml` | First-boot Contabo `userData` for 8-16 GB VMs (swap, UFW, SSH keys, fail2ban) |
+| `templates/cloud-init-vps.yaml` | First-boot `cloud-init` `userData` for 8-16 GB VMs (swap, UFW, SSH keys, fail2ban) |
 | `templates/hermes-gateway.service` | Hardened `svc-agent` systemd unit with memory/CPU caps |
-| `scripts/harden-contabo-agent.sh` | Idempotent OS + firewall + anti-miner hardening for fresh or UI-ordered VMs |
+| `scripts/harden-agent-vps.sh` | Idempotent OS + firewall + anti-miner hardening for fresh or UI-ordered VMs |
 | `scripts/check-miner-malware.sh` | Read-only audit for miners, unauthorized listeners, persistence, and `hermes doctor` |
-| `references/contabo-client-vps.md` | Contabo sizing, no-client-Tailscale admin patterns, and encrypted `restic` backups |
+| `references/client-vps-architecture.md` | 8-16 GB sizing, no-client-Tailscale admin patterns, and encrypted `restic` backups |
 | `references/agent-gateway-and-malware-defense.md` | Gateway `config.yaml`, `security_policy.yaml`, SSRF, and supply-chain controls |
 
 ## Procedure
@@ -65,17 +65,17 @@ ls -la /var/run/reboot-required
 
 Check `getfacl -p` on parent directories of any non-root service, and check secret files with `search_files` / `stat` for `0644` permissions inside shared project folders.
 
-### 2. Provision and harden an 8-16 GB Contabo client VM
+### 2. Provision and harden an 8-16 GB client VM
 
-1. **One client = one VPS.** Pass `templates/cloud-init-contabo.yaml` in Contabo `userData` (plus `sshKeys`) when ordering via API, or run `scripts/harden-contabo-agent.sh` immediately after a UI order (which emails a plaintext root password by default).
+1. **One client = one VPS.** Pass `templates/cloud-init-vps.yaml` in `userData` (plus your SSH key) when ordering via provider API/UI, or run `scripts/harden-agent-vps.sh` immediately after first login (critical when a provider emails/displays an initial root password).
 2. **Protect without forcing client Tailscale:**
-   - Enable Contabo's free Cloud Firewall on the instance.
+   - Enable your provider's cloud firewall on the instance when available.
    - If you manage the VM and the client only uses Telegram/Slack/Discord or a web UI: allow only your operator IP (or your own admin-only WireGuard/Tailscale) on port 22, and open **zero** public ports for polling-only gateways (only `80/443` if serving webhooks or a web UI).
-   - If the client self-manages: give them an authenticated web UI, keep SSH IP-allowlisted in Contabo Cloud Firewall (or disabled with Contabo Panel VNC console for break-glass). Never expose a browser shell (`ttyd`) behind email OTP.
-3. **Run the host hardening script** via `terminal` (sets 2-4 GB swap for 8-16 GB RAM, `ufw` default-deny, outbound SMTP `25/465/587` and Stratum mining port blocks, `noexec,nosuid,nodev` on `/dev/shm` and `/var/tmp`, `fail2ban`, `unattended-upgrades`, disables `avahi`/`cups`, and creates `svc-agent`):
+   - If the client self-manages: give them an authenticated web UI, keep SSH IP-allowlisted in the provider firewall (or disabled with the provider's VNC/serial console for break-glass). Never expose a browser shell (`ttyd`) behind email OTP.
+3. **Run the host hardening script** via `terminal` (sets 2-4 GB swap for 8-16 GB RAM, `ufw` default-deny, outbound SMTP `25/465/587` and Stratum mining port blocks, `noexec,nosuid,nodev` on `/dev/shm`, `fail2ban`, `unattended-upgrades`, disables `avahi`/`cups`, and creates `svc-agent`):
 
 ```bash
-sudo bash scripts/harden-contabo-agent.sh --admin-user ops --pubkey-file /root/.ssh/authorized_keys --mode polling
+sudo bash scripts/harden-agent-vps.sh --admin-user ops --pubkey-file /root/.ssh/authorized_keys --mode polling
 ```
 
 ### 3. Deploy and isolate the agent gateway

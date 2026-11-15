@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Idempotent hardening script for 8-16 GB Contabo client agent VMs (Ubuntu/Debian).
-# Run as root (or via sudo) on a fresh or UI-ordered VM.
+# Idempotent hardening script for 8-16 GB Linux client agent VMs (Ubuntu/Debian).
+# Provider-agnostic: works on any VPS/VDS or bare-metal Linux host. Run as root (or via sudo).
 
 ADMIN_USER="ops"
 PUBKEY_FILE=""
@@ -12,7 +12,7 @@ SWAP_SIZE="2G"
 
 usage() {
   cat <<'EOF'
-Usage: harden-contabo-agent.sh [options]
+Usage: harden-agent-vps.sh [options]
   --admin-user NAME       Non-root SSH admin user (default: ops)
   --pubkey-file PATH      Authorized SSH public key file for admin user (required if user has none)
   --mode polling|webhook  polling keeps 80/443 closed; webhook opens 80/443 (default: polling)
@@ -84,7 +84,7 @@ elif [ ! -s "/home/${ADMIN_USER}/.ssh/authorized_keys" ]; then
   exit 1
 fi
 
-# Lock root password (handles Contabo UI-ordered plaintext root password emails)
+# Lock root password (neutralizes UI-provisioned initial root passwords)
 passwd -l root >/dev/null || true
 
 cat > /etc/ssh/sshd_config.d/99-hardening.conf <<EOF
@@ -106,7 +106,7 @@ if ! id svc-agent >/dev/null 2>&1; then
 fi
 install -d -m 0700 -o svc-agent -g svc-agent /var/lib/hermes-agent /var/lib/hermes-agent/workspace
 
-echo "[5/8] Hardening /dev/shm and /var/tmp mount flags (noexec,nosuid,nodev)..."
+echo "[5/8] Hardening /dev/shm mount flags (noexec,nosuid,nodev)..."
 if mountpoint -q /dev/shm; then
   mount -o remount,noexec,nosuid,nodev /dev/shm || true
   if ! grep -qE '^tmpfs\s+/dev/shm\s' /etc/fstab; then
@@ -124,7 +124,7 @@ ufw default allow outgoing
 if [ -n "$SSH_ALLOW_CIDR" ]; then
   ufw allow from "$SSH_ALLOW_CIDR" to any port 22 proto tcp comment 'admin-ssh'
 else
-  ufw allow 22/tcp comment 'ssh-restrict-in-contabo-firewall'
+  ufw allow 22/tcp comment 'ssh-restrict-in-cloud-firewall'
 fi
 
 if [ "$GATEWAY_MODE" = "webhook" ]; then
